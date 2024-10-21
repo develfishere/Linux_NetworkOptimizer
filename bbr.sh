@@ -185,8 +185,9 @@ function restore_original() {
     if [ -f /etc/sysctl.conf.bak ]; then
         echo -e "\n${YELLOW}Restoring original network settings from backup...${NC}\n"
         cp /etc/sysctl.conf.bak /etc/sysctl.conf
-        sysctl -p
-        echo -e "\n${GREEN}Original network settings restored.${NC}\n"
+        rm /etc/sysctl.conf.bak
+        
+        sysctl -p > /dev/null 2>&1 && echo -e "\n${GREEN}Network settings restored successfully!${NC}\n"
 
         prompt_reboot
     else
