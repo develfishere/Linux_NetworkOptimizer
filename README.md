@@ -13,12 +13,12 @@ The script intelligently optimizes network settings based on your **system's har
 
 ## Prerequisites
 
-### Ensure that the `sudo` and `wget` packages are installed on your system
+### Ensure that the `sudo` and `curl` packages are installed on your system
 
 - Ubuntu & Debian:
 
 ```bash
-sudo apt update -q && sudo apt install -y sudo wget
+sudo apt update -q && sudo apt install -y sudo curl
 ```
 
 ### The script requires root privileges. If you're not logged in as root, use the following command
