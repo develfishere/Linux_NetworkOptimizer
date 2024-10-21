@@ -187,8 +187,14 @@ function restore_original() {
         cp /etc/sysctl.conf.bak /etc/sysctl.conf
         sysctl -p
         echo -e "\n${GREEN}Original network settings restored.${NC}\n"
+
+        prompt_reboot
     else
         echo -e "\n${RED}No backup found. Please manually restore sysctl.conf.${NC}\n"
+
+        # Prompt user to press any key to continue
+        read -n 1 -s -r -p "Press any key to continue..."
+        echo # for a new line
     fi
 }
 
