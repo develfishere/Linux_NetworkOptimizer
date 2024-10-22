@@ -17,7 +17,7 @@ fi
 function show_header() {
     print_logo
     echo -e "\n${BLUE}==========================================${NC}"
-    echo -e "${CYAN}   Network Optimizer Script V0.1${NC}"
+    echo -e "${CYAN}   Network Optimizer Script V0.2${NC}"
     echo -e "${BLUE}==========================================${NC}"
     echo -e "${GREEN}Hostname: $(hostname)${NC}"
     echo -e "${GREEN}OS: $(lsb_release -d | cut -f2)${NC}"
@@ -112,16 +112,19 @@ function intelligent_settings() {
         rmem_max=16777216
         wmem_max=16777216
         netdev_max_backlog=250000
+        queuing_disc="fq_codel"
     elif [ "$TOTAL_RAM" -lt 4000 ] && [ "$CPU_CORES" -le 4 ]; then
         rmem_max=33554432
         wmem_max=33554432
         netdev_max_backlog=500000
+        queuing_disc="fq"
     else
         rmem_max=67108864
         wmem_max=67108864
         netdev_max_backlog=1000000
+        queuing_disc="cake"
     fi
-    echo "$(date): Set rmem_max=$rmem_max, wmem_max=$wmem_max, netdev_max_backlog=$netdev_max_backlog based on system resources." >> $SYSCTL_LOG
+    echo "$(date): Set rmem_max=$rmem_max, wmem_max=$wmem_max, netdev_max_backlog=$netdev_max_backlog based on system resources. Queuing discipline: $queuing_disc" >> $SYSCTL_LOG
 
     # Adjust TCP settings based on network speed
     if [ "$(echo "$NETWORK_SPEED < 100" | bc)" -eq 1 ]; then
@@ -141,7 +144,7 @@ function intelligent_settings() {
     cat <<EOL
 
 # Optimized TCP/Network settings based on benchmarks
-net.core.default_qdisc = fq
+net.core.default_qdisc = $queuing_disc
 net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_ecn = 1
 net.ipv4.tcp_keepalive_time = 120
@@ -179,6 +182,7 @@ EOL
 
     prompt_reboot
 }
+
 
 # Function to restore the original sysctl settings
 function restore_original() {
