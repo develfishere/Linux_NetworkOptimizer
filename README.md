@@ -20,7 +20,7 @@ It dynamically selects and implements the most suitable queuing discipline from 
 ## Changelog
 
 <details>
-  <summary><strong>v0.2 - 2024-10-22</strong></summary>
+  <summary><strong>v0.2 - 2024-10-23</strong></summary>
 
 ### Added
 
