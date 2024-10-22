@@ -85,7 +85,6 @@ function network_benchmark() {
     fi
 }
 
-
 # Function to intelligently set buffer sizes and sysctl settings
 function intelligent_settings() {
     gather_system_info
@@ -94,9 +93,7 @@ function intelligent_settings() {
     network_benchmark
     sleep 2
 
-    SYSCTL_LOG="/var/log/sysctl_changes.log"
-    echo -e "\n${YELLOW}Logging sysctl changes to $SYSCTL_LOG...${NC}\n"
-    echo -e "\n$(date): Starting sysctl configuration..." >> $SYSCTL_LOG
+    echo -e "\n$(date): Starting sysctl configuration..."
 
     sleep 2
     
@@ -124,7 +121,7 @@ function intelligent_settings() {
         netdev_max_backlog=1000000
         queuing_disc="cake"
     fi
-    echo "$(date): Set rmem_max=$rmem_max, wmem_max=$wmem_max, netdev_max_backlog=$netdev_max_backlog based on system resources. Queuing discipline: $queuing_disc" >> $SYSCTL_LOG
+    echo "$(date): Set rmem_max=$rmem_max, wmem_max=$wmem_max, netdev_max_backlog=$netdev_max_backlog based on system resources. Queuing discipline: $queuing_disc"
 
     # Adjust TCP settings based on network speed
     if [ "$(echo "$NETWORK_SPEED < 100" | bc)" -eq 1 ]; then
@@ -137,7 +134,7 @@ function intelligent_settings() {
         tcp_rmem="4096 87380 67108864"
         tcp_wmem="4096 65536 67108864"
     fi
-    echo "$(date): Set tcp_rmem=$tcp_rmem, tcp_wmem=$tcp_wmem based on network speed." >> $SYSCTL_LOG
+    echo "$(date): Set tcp_rmem=$tcp_rmem, tcp_wmem=$tcp_wmem based on network speed."
 
     # Apply the settings to sysctl.conf
     {
@@ -174,12 +171,21 @@ net.ipv4.tcp_fin_timeout = 10
 net.ipv4.ip_forward = 1
 
 EOL
-    } >> /etc/sysctl.conf
+} >> /etc/sysctl.conf
 
-    echo "$(date): Network optimizations added to sysctl.conf." >> $SYSCTL_LOG
+    echo "$(date): Network optimizations added to sysctl.conf."
 
     sysctl -p > /dev/null 2>&1 && echo -e "\n${GREEN}Network settings applied successfully!${NC}\n"
 
+    # Log the final values of interest
+    echo -e "\n${YELLOW}Logging dynamic values...${NC}\n\n"
+    echo "$(date): Final settings applied."
+    echo "Total RAM: $TOTAL_RAM MB, CPU Cores: $CPU_CORES"
+    echo "Network Speed: $(printf "%.2f" "$NETWORK_SPEED") Mbps"
+    echo "rmem_max: $rmem_max, wmem_max: $wmem_max, netdev_max_backlog: $netdev_max_backlog"
+    echo "tcp_rmem: $tcp_rmem, tcp_wmem: $tcp_wmem, Queuing discipline: $queuing_disc"
+    echo ""
+    echo ""
     prompt_reboot
 }
 
