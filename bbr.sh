@@ -81,14 +81,12 @@ function network_benchmark() {
     if ! command -v speedtest &> /dev/null; then
         echo -e "\n${YELLOW}Ookla Speedtest not found. Installing Ookla Speedtest CLI...${NC}\n"
 
-        # Add the Ookla Speedtest repository
-        curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
-
-        # Update the package list and install speedtest
-        if ! sudo apt update && sudo apt install -y speedtest; then
+        # Add Ookla repository and install speedtest
+        if ! curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash || ! sudo apt-get install -y speedtest; then
             echo -e "\n${RED}Failed to install Ookla Speedtest CLI. Exiting...${NC}\n"
             exit 1
         fi
+
     fi
 
     MAX_RETRIES=3
