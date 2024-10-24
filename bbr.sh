@@ -17,7 +17,7 @@ fi
 function show_header() {
     print_logo
     echo -e "\n${BLUE}==========================================${NC}"
-    echo -e "${CYAN}   Network Optimizer Script V0.2${NC}"
+    echo -e "${CYAN}   Network Optimizer Script V0.3${NC}"
     echo -e "${BLUE}==========================================${NC}"
     echo -e "${GREEN}Hostname: $(hostname)${NC}"
     echo -e "${GREEN}OS: $(lsb_release -d | cut -f2)${NC}"
@@ -42,6 +42,26 @@ print_logo() {
     echo -e "${CYAN}GitHub: https://github.com/develfishere${NC}\n"
 }
 
+# Function to fully update and upgrade the server
+function full_update_upgrade() {
+    echo -e "\n${YELLOW}Updating package list...${NC}"
+    sudo apt update
+
+    echo -e "\n${YELLOW}Upgrading installed packages...${NC}"
+    sudo apt upgrade -y
+
+    echo -e "\n${YELLOW}Performing full distribution upgrade...${NC}"
+    sudo apt dist-upgrade -y
+
+    echo -e "\n${YELLOW}Removing unnecessary packages...${NC}"
+    sudo apt autoremove -y
+
+    echo -e "\n${YELLOW}Cleaning up any cached packages...${NC}"
+    sudo apt autoclean
+
+    echo -e "\n${GREEN}Server update and upgrade complete.${NC}\n"
+}
+
 # Function to gather system information
 function gather_system_info() {
     CPU_CORES=$(nproc)
@@ -49,12 +69,26 @@ function gather_system_info() {
     echo -e "\n${GREEN}Detected CPU cores: $CPU_CORES${NC}"
     echo -e "${GREEN}Detected Total RAM: ${TOTAL_RAM}MB${NC}\n"
 }
-
-# Function to benchmark network speed with speedtest-cli and retry if failed
+# Function to benchmark network speed with Ookla Speedtest CLI and retry if failed
 function network_benchmark() {
+    # Remove any previous or incompatible versions of speedtest-cli
+    if dpkg -l | grep -q speedtest-cli; then
+        echo -e "\n${YELLOW}Removing previous version of speedtest-cli...${NC}\n"
+        sudo apt remove -y speedtest-cli
+    fi
+
+    # Check if Ookla Speedtest is installed, if not, install it
     if ! command -v speedtest &> /dev/null; then
-        echo -e "\n${YELLOW}speedtest not found. Installing speedtest-cli...${NC}\n"
-        apt update && apt install -y speedtest-cli
+        echo -e "\n${YELLOW}Ookla Speedtest not found. Installing Ookla Speedtest CLI...${NC}\n"
+
+        # Add the Ookla Speedtest repository
+        curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
+
+        # Update the package list and install speedtest
+        if ! sudo apt update && sudo apt install -y speedtest; then
+            echo -e "\n${RED}Failed to install Ookla Speedtest CLI. Exiting...${NC}\n"
+            exit 1
+        fi
     fi
 
     MAX_RETRIES=3
@@ -65,10 +99,10 @@ function network_benchmark() {
     while [ $ATTEMPT -lt $MAX_RETRIES ]; do
         echo -e "\n${YELLOW}Attempting to test network speed (Attempt $((ATTEMPT+1))/${MAX_RETRIES})...${NC}"
         
-        # Running speedtest and extracting download speed from the JSON output
-        NETWORK_SPEED=$(speedtest --json | jq '.download')
+        # Running speedtest and extracting download bandwidth (in bits per second) from the JSON output
+        NETWORK_SPEED=$(speedtest --accept-license --accept-gdpr --format=json | jq '.download.bandwidth')
 
-        if [ -n "$NETWORK_SPEED" ]; then
+        if [ -n "$NETWORK_SPEED" ] && [ "$NETWORK_SPEED" != "null" ]; then
             NETWORK_SPEED=$(echo "$NETWORK_SPEED / 1000000" | bc -l) # Convert from bits/sec to Mbps
             echo -e "\n${GREEN}Detected network speed: $(printf "%.2f" ${NETWORK_SPEED}) Mbps.${NC}\n"
             break
@@ -79,14 +113,19 @@ function network_benchmark() {
         fi
     done
 
-    if [ -z "$NETWORK_SPEED" ]; then
-        NETWORK_SPEED=200
-        echo -e "\n${RED}All tests failed after ${MAX_RETRIES} attempts. Defaulting to ${NETWORK_SPEED} Mbps.${NC}\n"
+    if [ -z "$NETWORK_SPEED" ] || [ "$NETWORK_SPEED" == "null" ]; then
+        echo -e "\n${RED}All tests failed after ${MAX_RETRIES} attempts. Exiting...${NC}\n"
+        exit 1
     fi
 }
 
+
 # Function to intelligently set buffer sizes and sysctl settings
 function intelligent_settings() {
+
+    full_update_upgrade
+    sleep 2
+
     gather_system_info
     sleep 2
 
@@ -94,7 +133,6 @@ function intelligent_settings() {
     sleep 2
 
     echo -e "\n$(date): Starting sysctl configuration..."
-
     sleep 2
     
     echo -e "\n${YELLOW}Backing up current sysctl.conf...${NC}\n"
