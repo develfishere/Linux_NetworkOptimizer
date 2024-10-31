@@ -1,4 +1,4 @@
-# بهینه‌ساز شبکه لینوکس نسخه 0.3
+# بهینه‌ساز شبکه لینوکس نسخه 0.4
 
 این مخزن شامل یک **اسکریپت Bash** است که برای بهبود خودکار سرعت و عملکرد شبکه در سیستم‌های لینوکس ساخته شده است
 
@@ -22,25 +22,19 @@
 
 5- بهینه‌سازی `netdev_max_backlog` و بافرهای حافظه برای مدیریت حجم بالای اتصالات TCP
 
-6- ارائه پشتیبان‌گیری خودکار و بازیابی تنظیمات اصلی شبکه
+6- یافتن بهترین اندازه `MTU` به منظور بهبود عملکرد شبکه
+
+7- ارائه پشتیبان‌گیری خودکار و بازیابی تنظیمات اصلی شبکه
 
 ## پیش‌نیازها
 
-### 1. اطمینان حاصل کنید که بسته‌های `sudo`, `curl` و `jq` بر روی سیستم شما نصب شده باشند
-
-#### برای Ubuntu و Debian
-
-```bash
-sudo apt update -q && sudo apt install -y sudo curl jq
-```
-
-### 2. این اسکریپت نیاز به دسترسی روت (Sudo) دارد اگر به عنوان روت وارد سیستم نشده‌اید، از دستور زیر استفاده کنید
+### 1. این اسکریپت نیاز به دسترسی روت (Sudo) دارد اگر به عنوان روت وارد سیستم نشده‌اید، از دستور زیر استفاده کنید
 
 ```bash
 sudo -i
 ```
 
-### 3. Ookla Speedtest
+### 2. Ookla Speedtest
 
 #### این اسکریپت به طور خودکار اگر Ookla Speedtest CLI نصب نشده باشد، آن را نصب می‌کند. با این حال، اگر ترجیح می‌دهید آن را به صورت دستی نصب کنید، می‌توانید از دستور زیر استفاده کنید
 
@@ -55,7 +49,9 @@ sudo apt-get install speedtest
 برای به‌روزرسانی سیستم و اجرای اسکریپت از دستور زیر استفاده کنید
 
 ```bash
-sudo apt update && bash <(curl -Ls https://raw.githubusercontent.com/develfishere/Linux_NetworkOptimizer/main/bbr.sh --ipv4)
+sudo apt-get -o Acquire::ForceIPv4=true update && \
+sudo apt-get -o Acquire::ForceIPv4=true install -y sudo curl jq && \
+bash <(curl -Ls --ipv4 https://raw.githubusercontent.com/develfishere/Linux_NetworkOptimizer/main/bbr.sh)
 ```
 
 ## پشتیبانی

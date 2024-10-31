@@ -1,4 +1,4 @@
-# Linux Network Optimizer v0.3
+# Linux Network Optimizer v0.4
 
 This repository contains a **Bash script** designed to enhance network performance on Linux systems
 
@@ -17,25 +17,18 @@ It dynamically selects and implements the most suitable queuing discipline from 
 - Adjusts TCP buffer sizes (`tcp_rmem`, `tcp_wmem`) based on system CPU, RAM, and network speed
 - Performs network benchmarking using `ookla speedtest` to inform dynamic network tuning
 - Optimizes `netdev_max_backlog` and memory buffers for handling high volumes of TCP connections
+- Find the optimal `MTU` size for improved network performance
 - Provides automatic backup and restoration of original network settings
 
 ## Prerequisites
 
-### 1. Ensure that the `sudo`, `curl`, and `jq` packages are installed on your system
-
-#### Ubuntu & Debian
-
-```bash
-sudo apt update && sudo apt install -y sudo curl jq
-```
-
-### 2. The script requires root privileges. If you're not logged in as root, use the following command
+### 1. The script requires root privileges. If you're not logged in as root, use the following command
 
 ```bash
 sudo -i
 ```
 
-### 3. Ookla Speedtest
+### 2. Ookla Speedtest
 
 #### The script will automatically install Ookla Speedtest CLI if it's not already installed. However, if you prefer to install it manually, you can use the following command
 
@@ -49,10 +42,12 @@ sudo apt-get install speedtest
 
 ## How to Use
 
-Run the following command to update your system and execute the optimization script
+Run the following command to update your system, install required packages, and execute the optimization script
 
 ```bash
-sudo apt update && bash <(curl -Ls https://raw.githubusercontent.com/develfishere/Linux_NetworkOptimizer/main/bbr.sh --ipv4)
+sudo apt-get -o Acquire::ForceIPv4=true update && \
+sudo apt-get -o Acquire::ForceIPv4=true install -y sudo curl jq && \
+bash <(curl -Ls --ipv4 https://raw.githubusercontent.com/develfishere/Linux_NetworkOptimizer/main/bbr.sh)
 ```
 
 ## Support

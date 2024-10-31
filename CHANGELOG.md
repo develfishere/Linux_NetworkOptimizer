@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## v0.4 - 2024-10-31
+
+### Added
+
+- Configure and fix server hosts and DNS settings.
+- Implement function to find the optimal MTU size for improved network performance.
+
+### Fixed
+
+- Enforce `apt update` and `apt upgrade` commands to use IPv4 to prevent connectivity issues on IPv6.
+
 ## v0.3 - 2024-10-24
 
 ### Added

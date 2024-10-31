@@ -17,7 +17,7 @@ fi
 function show_header() {
     print_logo
     echo -e "\n${BLUE}==========================================${NC}"
-    echo -e "${CYAN}   Network Optimizer Script V0.3${NC}"
+    echo -e "${CYAN}   Network Optimizer Script V0.4${NC}"
     echo -e "${BLUE}==========================================${NC}"
     echo -e "${GREEN}Hostname: $(hostname)${NC}"
     echo -e "${GREEN}OS: $(lsb_release -d | cut -f2)${NC}"
@@ -42,25 +42,80 @@ print_logo() {
     echo -e "${CYAN}GitHub: https://github.com/develfishere${NC}\n"
 }
 
+
+# Fix /etc/hosts file
+function fix_etc_hosts() { 
+    local host_path=${1:-/etc/hosts}
+
+    echo -e "${YELLOW}Starting to fix the hosts file...${NC}"
+
+    # Backup current hosts file
+    if cp "$host_path" "${host_path}.bak"; then
+        echo -e "${YELLOW}Hosts file backed up as ${host_path}.bak${NC}"
+    else
+        echo -e "${RED}Backup failed. Cannot proceed.${NC}"
+        return 1
+    fi
+
+    # Check if hostname is in hosts file; add if missing
+    if ! grep -q "$(hostname)" "$host_path"; then
+        if echo "127.0.1.1 $(hostname)" | sudo tee -a "$host_path" > /dev/null; then
+            echo -e "${GREEN}Hostname entry added to hosts file.${NC}"
+        else
+            echo -e "${RED}Failed to add hostname entry.${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}Hostname entry already present. No changes needed.${NC}"
+    fi
+}
+
+# Temporarily fix DNS by modifying /etc/resolv.conf
+function fix_dns() {
+    local dns_path=${1:-/etc/resolv.conf}
+
+    echo -e "${YELLOW}Starting to update DNS configuration...${NC}"
+
+    # Backup current DNS settings
+    if cp "$dns_path" "${dns_path}.bak"; then
+        echo -e "${YELLOW}DNS configuration backed up as ${dns_path}.bak${NC}"
+    else
+        echo -e "${RED}Backup failed. Cannot proceed.${NC}"
+        return 1
+    fi
+
+    # Clear current nameservers and add temporary ones
+    if sed -i '/nameserver/d' "$dns_path" && {
+        echo "nameserver 1.1.1.2" | sudo tee -a "$dns_path" > /dev/null
+        echo "nameserver 1.0.0.2" | sudo tee -a "$dns_path" > /dev/null
+    }; then
+        echo -e "${GREEN}Temporary DNS servers set successfully.${NC}"
+    else
+        echo -e "${RED}Failed to update DNS configuration.${NC}"
+        return 1
+    fi
+}
+
 # Function to fully update and upgrade the server
 function full_update_upgrade() {
     echo -e "\n${YELLOW}Updating package list...${NC}"
-    sudo apt update
+    sudo apt -o Acquire::ForceIPv4=true update
 
     echo -e "\n${YELLOW}Upgrading installed packages...${NC}"
-    sudo apt upgrade -y
+    sudo apt -o Acquire::ForceIPv4=true upgrade -y
 
     echo -e "\n${YELLOW}Performing full distribution upgrade...${NC}"
-    sudo apt dist-upgrade -y
+    sudo apt -o Acquire::ForceIPv4=true dist-upgrade -y
 
     echo -e "\n${YELLOW}Removing unnecessary packages...${NC}"
-    sudo apt autoremove -y
+    sudo apt -o Acquire::ForceIPv4=true autoremove -y
 
     echo -e "\n${YELLOW}Cleaning up any cached packages...${NC}"
-    sudo apt autoclean
+    sudo apt -o Acquire::ForceIPv4=true autoclean
 
     echo -e "\n${GREEN}Server update and upgrade complete.${NC}\n"
 }
+
 
 # Function to gather system information
 function gather_system_info() {
@@ -120,13 +175,25 @@ function network_benchmark() {
 
 # Function to intelligently set buffer sizes and sysctl settings
 function intelligent_settings() {
+    echo -e "\n${YELLOW}Starting intelligent network optimizations...${NC}\n"
 
+    echo -e "\n${YELLOW}Fixing /etc/hosts file...${NC}\n"
+    fix_etc_hosts
+    sleep 2
+
+    echo -e "\n${YELLOW}Waiting for DNS to propagate...${NC}\n"
+    fix_dns
+    sleep 2
+
+    echo -e "\n${YELLOW}Performing full system update and upgrade...${NC}\n"
     full_update_upgrade
     sleep 2
 
+    echo -e "\n${YELLOW}Gathering system information...${NC}\n"
     gather_system_info
     sleep 2
 
+    echo -e "\n${YELLOW}Benchmarking network speed...${NC}\n"
     network_benchmark
     sleep 2
 
@@ -245,6 +312,37 @@ function restore_original() {
     fi
 }
 
+find_best_mtu() {
+    local server_ip=8.8.8.8  # Google DNS server
+    local start_mtu=1500  # Standard MTU size for Ethernet
+    local min_mtu=1200    # Lower bound to prevent very small MTUs
+
+    echo -e "${CYAN}Finding optimal MTU for server $server_ip...${NC}"
+
+    # Test if the server is reachable
+    if ! ping -c 1 -W 1 "$server_ip" &>/dev/null; then
+        echo -e "${RED}Server $server_ip is unreachable. Check the IP address or network connection.${NC}"
+        return 
+    fi
+
+    # Find the maximum MTU without fragmentation
+    local mtu=$start_mtu
+    while [ $mtu -ge $min_mtu ]; do
+        if ping -M do -s $((mtu - 28)) -c 1 "$server_ip" &>/dev/null; then
+            echo -e "${GREEN}Optimal MTU found: $mtu bytes${NC}"
+            read -n 1 -s -r -p "Press any key to continue..."
+            echo # for a new line
+            return 
+        fi
+        ((mtu--))
+    done
+
+    echo -e "${RED}No suitable MTU found. Try adjusting the minimum MTU limit.${NC}"
+    read -n 1 -s -r -p "Press any key to continue..."
+    echo # for a new line
+    return 
+}
+
 # Function to prompt the user for a reboot
 function prompt_reboot() {
     read -p "It is recommended to reboot for changes to take effect. Reboot now? (y/[default=n]): " reboot_choice
@@ -268,14 +366,16 @@ function show_menu() {
         show_header
         echo -e "${CYAN}Menu:${NC}"
         echo -e "${GREEN}1. Apply BBR and Intelligent Optimizations${NC}"
-        echo -e "${GREEN}2. Restore Original Settings${NC}"
+        echo -e "${GREEN}2. Find Best MTU for Server${NC}"
+        echo -e "${GREEN}3. Restore Original Settings${NC}"
         echo -e "${GREEN}0. Exit${NC}"
         echo
         read -p "Enter your choice: " choice
 
         case $choice in
             1) intelligent_settings ;;
-            2) restore_original ;;
+            2) find_best_mtu ;;
+            3) restore_original ;;
             0) echo -e "\n${YELLOW}Exiting...${NC}" ; exit 0 ;;
             *) echo -e "\n${RED}Invalid option. Please try again.${NC}\n" ; sleep 2 ;;
         esac
