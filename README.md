@@ -1,10 +1,10 @@
-# Linux Network Optimizer v0.4
+# Linux Network Optimizer v0.5
 
 This repository contains a **Bash script** designed to enhance network performance on Linux systems
 
 The script intelligently optimizes network settings based on your **system's hardware specifications** (**CPU**, **RAM**) and current **network speed**
 
-It dynamically selects and implements the most suitable queuing discipline from **fq**, **fq_codel**, or **cake**, and uses the **BBR** (Bottleneck Bandwidth and Round-trip propagation time) congestion control algorithm for optimal performance
+It dynamically selects and implements the most suitable queuing discipline from **fq_codel** or **cake**, and uses the **BBR** (Bottleneck Bandwidth and Round-trip propagation time) congestion control algorithm for optimal performance
 
 - If you prefer, you can refer to the [Persian Readme](./README_FA.md)
 
@@ -12,7 +12,7 @@ It dynamically selects and implements the most suitable queuing discipline from 
 
 ## Key Features
 
-- Dynamically selects and configures queuing disciplines (`fq`, `fq_codel`, `cake`) based on system resources to minimize latency
+- Dynamically selects and configures queuing disciplines (`fq_codel`, `cake`) based on system resources to minimize latency
 - Implements `BBR` congestion control for optimal throughput and low latency
 - Adjusts TCP buffer sizes (`tcp_rmem`, `tcp_wmem`) based on system CPU, RAM, and network speed
 - Performs network benchmarking using `ookla speedtest` to inform dynamic network tuning

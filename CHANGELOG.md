@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v0.5 - 2024-11-01
+
+### Fixed
+
+- Removed `fq` queuing algorithm and replaced `cake` with that for better performance
+
 ## v0.4 - 2024-10-31
 
 ### Added

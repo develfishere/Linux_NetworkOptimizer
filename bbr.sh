@@ -17,7 +17,7 @@ fi
 function show_header() {
     print_logo
     echo -e "\n${BLUE}==========================================${NC}"
-    echo -e "${CYAN}   Network Optimizer Script V0.4${NC}"
+    echo -e "${CYAN}   Network Optimizer Script V0.5${NC}"
     echo -e "${BLUE}==========================================${NC}"
     echo -e "${GREEN}Hostname: $(hostname)${NC}"
     echo -e "${GREEN}OS: $(lsb_release -d | cut -f2)${NC}"
@@ -217,7 +217,7 @@ function intelligent_settings() {
         rmem_max=33554432
         wmem_max=33554432
         netdev_max_backlog=500000
-        queuing_disc="fq"
+        queuing_disc="cake"
     else
         rmem_max=67108864
         wmem_max=67108864
