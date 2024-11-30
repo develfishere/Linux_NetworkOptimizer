@@ -2,7 +2,7 @@
 
 This repository contains a **Bash script** designed to enhance network performance on Linux systems
 
-The script intelligently optimizes network settings based on your **system's hardware specifications** (**CPU**, **RAM**) and current **network speed**
+The script intelligently optimizes network settings based on your **system's hardware specifications** (**CPU**, **RAM**)
 
 It dynamically selects and implements the most suitable queuing discipline from **fq_codel** or **cake**, and uses the **BBR** (Bottleneck Bandwidth and Round-trip propagation time) congestion control algorithm for optimal performance
 
@@ -14,28 +14,17 @@ It dynamically selects and implements the most suitable queuing discipline from 
 
 - Dynamically selects and configures queuing disciplines (`fq_codel`, `cake`) based on system resources to minimize latency
 - Implements `BBR` congestion control for optimal throughput and low latency
-- Adjusts TCP buffer sizes (`tcp_rmem`, `tcp_wmem`) based on system CPU, RAM, and network speed
-- Performs network benchmarking using `ookla speedtest` to inform dynamic network tuning
+- Adjusts TCP buffer sizes (`tcp_rmem`, `tcp_wmem`) based on system CPU and RAM
 - Optimizes `netdev_max_backlog` and memory buffers for handling high volumes of TCP connections
 - Find the optimal `MTU` size for improved network performance
 - Provides automatic backup and restoration of original network settings
 
 ## Prerequisites
 
-### 1. The script requires root privileges. If you're not logged in as root, use the following command
+### The script requires root privileges. If you're not logged in as root, use the following command
 
 ```bash
 sudo -i
-```
-
-### 2. Ookla Speedtest
-
-#### The script will automatically install Ookla Speedtest CLI if it's not already installed. However, if you prefer to install it manually, you can use the following command
-
-```bash
-sudo apt-get install curl
-curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
-sudo apt-get install speedtest
 ```
 
 ####

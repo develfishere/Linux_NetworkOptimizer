@@ -17,7 +17,7 @@ fi
 function show_header() {
     print_logo
     echo -e "\n${BLUE}==========================================${NC}"
-    echo -e "${CYAN}   Network Optimizer Script V0.5${NC}"
+    echo -e "${CYAN}   Network Optimizer Script V0.6${NC}"
     echo -e "${BLUE}==========================================${NC}"
     echo -e "${GREEN}Hostname: $(hostname)${NC}"
     echo -e "${GREEN}OS: $(lsb_release -d | cut -f2)${NC}"
@@ -96,6 +96,28 @@ function fix_dns() {
     fi
 }
 
+
+force_ipv4_apt() {
+    local config_file="/etc/apt/apt.conf.d/99force-ipv4"
+    local config_line='Acquire::ForceIPv4 "true";'
+
+    # Check if the configuration already exists
+    if [[ -f "$config_file" && "$(grep -Fx "$config_line" "$config_file")" == "$config_line" ]]; then
+        echo "Configuration is already set in $config_file."
+        return 0
+    fi
+
+    # Add the configuration
+    echo "$config_line" | sudo tee "$config_file" >/dev/null
+    if [[ $? -eq 0 ]]; then
+        echo "Configuration set successfully in $config_file."
+    else
+        echo "Failed to set configuration."
+        return 1
+    fi
+}
+
+
 # Function to fully update and upgrade the server
 function full_update_upgrade() {
     echo -e "\n${YELLOW}Updating package list...${NC}"
@@ -124,54 +146,6 @@ function gather_system_info() {
     echo -e "\n${GREEN}Detected CPU cores: $CPU_CORES${NC}"
     echo -e "${GREEN}Detected Total RAM: ${TOTAL_RAM}MB${NC}\n"
 }
-# Function to benchmark network speed with Ookla Speedtest CLI and retry if failed
-function network_benchmark() {
-    # Remove any previous or incompatible versions of speedtest-cli
-    if dpkg -l | grep -q speedtest-cli; then
-        echo -e "\n${YELLOW}Removing previous version of speedtest-cli...${NC}\n"
-        sudo apt remove -y speedtest-cli
-    fi
-
-    # Check if Ookla Speedtest is installed, if not, install it
-    if ! command -v speedtest &> /dev/null; then
-        echo -e "\n${YELLOW}Ookla Speedtest not found. Installing Ookla Speedtest CLI...${NC}\n"
-
-        # Add Ookla repository and install speedtest
-        if ! curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash || ! sudo apt-get install -y speedtest; then
-            echo -e "\n${RED}Failed to install Ookla Speedtest CLI. Exiting...${NC}\n"
-            exit 1
-        fi
-
-    fi
-
-    MAX_RETRIES=3
-    RETRY_DELAY=2
-    ATTEMPT=0
-    NETWORK_SPEED=0
-
-    while [ $ATTEMPT -lt $MAX_RETRIES ]; do
-        echo -e "\n${YELLOW}Attempting to test network speed (Attempt $((ATTEMPT+1))/${MAX_RETRIES})...${NC}"
-        
-        # Running speedtest and extracting download bandwidth (in bits per second) from the JSON output
-        NETWORK_SPEED=$(speedtest --accept-license --accept-gdpr --format=json | jq '.download.bandwidth')
-
-        if [ -n "$NETWORK_SPEED" ] && [ "$NETWORK_SPEED" != "null" ]; then
-            NETWORK_SPEED=$(echo "$NETWORK_SPEED / 1000000" | bc -l) # Convert from bits/sec to Mbps
-            echo -e "\n${GREEN}Detected network speed: $(printf "%.2f" ${NETWORK_SPEED}) Mbps.${NC}\n"
-            break
-        else
-            echo -e "\n${RED}Failed to measure speed. Retrying in ${RETRY_DELAY} seconds...${NC}\n"
-            ((ATTEMPT++))
-            sleep $RETRY_DELAY
-        fi
-    done
-
-    if [ -z "$NETWORK_SPEED" ] || [ "$NETWORK_SPEED" == "null" ]; then
-        echo -e "\n${RED}All tests failed after ${MAX_RETRIES} attempts. Exiting...${NC}\n"
-        exit 1
-    fi
-}
-
 
 # Function to intelligently set buffer sizes and sysctl settings
 function intelligent_settings() {
@@ -185,16 +159,16 @@ function intelligent_settings() {
     fix_dns
     sleep 2
 
+    echo -e "\n${YELLOW}Forcing IPv4 for APT...${NC}\n"
+    force_ipv4_apt
+    sleep 2
+
     echo -e "\n${YELLOW}Performing full system update and upgrade...${NC}\n"
     full_update_upgrade
     sleep 2
 
     echo -e "\n${YELLOW}Gathering system information...${NC}\n"
     gather_system_info
-    sleep 2
-
-    echo -e "\n${YELLOW}Benchmarking network speed...${NC}\n"
-    network_benchmark
     sleep 2
 
     echo -e "\n$(date): Starting sysctl configuration..."
@@ -226,18 +200,11 @@ function intelligent_settings() {
     fi
     echo "$(date): Set rmem_max=$rmem_max, wmem_max=$wmem_max, netdev_max_backlog=$netdev_max_backlog based on system resources. Queuing discipline: $queuing_disc"
 
-    # Adjust TCP settings based on network speed
-    if [ "$(echo "$NETWORK_SPEED < 100" | bc)" -eq 1 ]; then
-        tcp_rmem="4096 87380 16777216"
-        tcp_wmem="4096 65536 16777216"
-    elif [ "$(echo "$NETWORK_SPEED < 500" | bc)" -eq 1 ]; then
-        tcp_rmem="4096 87380 33554432"
-        tcp_wmem="4096 65536 33554432"
-    else
-        tcp_rmem="4096 87380 67108864"
-        tcp_wmem="4096 65536 67108864"
-    fi
-    echo "$(date): Set tcp_rmem=$tcp_rmem, tcp_wmem=$tcp_wmem based on network speed."
+    # Adjust TCP settings 
+    tcp_rmem="4096 87380 16777216"
+    tcp_wmem="4096 65536 16777216"
+
+    echo "$(date): Set tcp_rmem=$tcp_rmem, tcp_wmem=$tcp_wmem."
 
     # Apply the settings to sysctl.conf
     {
@@ -248,8 +215,8 @@ net.core.default_qdisc = $queuing_disc
 net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_ecn = 1
 net.ipv4.tcp_keepalive_time = 120
-net.ipv4.tcp_keepalive_intvl = 30
-net.ipv4.tcp_keepalive_probes = 5
+net.ipv4.tcp_keepalive_intvl = 20
+net.ipv4.tcp_keepalive_probes = 3
 net.ipv4.tcp_sack = 1
 net.ipv4.tcp_window_scaling = 1
 net.ipv4.tcp_mtu_probing = 1
@@ -265,7 +232,7 @@ net.ipv4.tcp_rmem = $tcp_rmem
 net.ipv4.tcp_wmem = $tcp_wmem
 
 # SYN Flood Protection
-net.ipv4.tcp_max_syn_backlog = 4096
+net.ipv4.tcp_max_syn_backlog = 8192
 
 # Reduce the time it takes to free up connections in FIN_WAIT state
 net.ipv4.tcp_fin_timeout = 10
@@ -284,7 +251,6 @@ EOL
     echo -e "\n${YELLOW}Logging dynamic values...${NC}\n\n"
     echo "$(date): Final settings applied."
     echo "Total RAM: $TOTAL_RAM MB, CPU Cores: $CPU_CORES"
-    echo "Network Speed: $(printf "%.2f" "$NETWORK_SPEED") Mbps"
     echo "rmem_max: $rmem_max, wmem_max: $wmem_max, netdev_max_backlog: $netdev_max_backlog"
     echo "tcp_rmem: $tcp_rmem, tcp_wmem: $tcp_wmem, Queuing discipline: $queuing_disc"
     echo ""
