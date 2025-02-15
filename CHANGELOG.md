@@ -1,11 +1,17 @@
 # CHANGELOG
+## v0.7 - 2025-02-16
+
+### Fixed
+
+- Minor bugs and stability improvements.
+- Optimizations for lossy and unstable network
 
 ## v0.6 - 2024-11-30
 
 ### Fixed
 
-- Removed tcp optimization based on speedtest due to unstablity
-- Optimization and Set force apt to use IPv4 by default
+- Removed tcp optimization based on speedtest due to instability
+- Optimization to set force apt to use IPv4 by default
 
 ## v0.5 - 2024-11-01
 

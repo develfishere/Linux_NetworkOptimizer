@@ -17,14 +17,39 @@ fi
 function show_header() {
     print_logo
     echo -e "\n${BLUE}==========================================${NC}"
-    echo -e "${CYAN}   Network Optimizer Script V0.6${NC}"
+    echo -e "${CYAN}   Network Optimizer Script V0.7${NC}"
     echo -e "${BLUE}==========================================${NC}"
-    echo -e "${GREEN}Hostname: $(hostname)${NC}"
-    echo -e "${GREEN}OS: $(lsb_release -d | cut -f2)${NC}"
-    echo -e "${GREEN}Kernel Version: $(uname -r)${NC}"
-    echo -e "${GREEN}Uptime: $(uptime -p)${NC}"
+
+    echo -e "${GREEN}Hostname       : $(hostname)${NC}"
+    
+    # Get OS description using lsb_release; fallback to /etc/os-release if needed
+    os_info=$(lsb_release -d 2>/dev/null | cut -f2)
+    if [ -z "$os_info" ]; then
+        os_info=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d '=' -f2 | tr -d '"')
+    fi
+    echo -e "${GREEN}OS             : $os_info${NC}"
+    
+    echo -e "${GREEN}Kernel Version : $(uname -r)${NC}"
+    echo -e "${GREEN}Uptime         : $(uptime -p)${NC}"
+    echo -e "${GREEN}IP Address     : $(hostname -I | awk '{print $1}')${NC}"
+    
+    # Get CPU model information
+    cpu_model=$(grep -m1 'model name' /proc/cpuinfo | cut -d ':' -f2 | xargs)
+    echo -e "${GREEN}CPU            : $cpu_model${NC}"
+    
+    echo -e "${GREEN}Architecture   : $(uname -m)${NC}"
+    
+    # Display memory usage in a human-readable format
+    mem_usage=$(free -h | awk '/^Mem:/{print $3 " / " $2}')
+    echo -e "${GREEN}Memory Usage   : $mem_usage${NC}"
+    
+    # Extract load average from uptime output and trim leading space
+    load_avg=$(uptime | awk -F'load average:' '{print $2}' | sed 's/^ //')
+    echo -e "${GREEN}Load Average   : $load_avg${NC}"
+    
     echo -e "${BLUE}==========================================${NC}\n"
 }
+
 
 # Function to print the DevElf logo
 print_logo() {
@@ -146,7 +171,6 @@ function gather_system_info() {
     echo -e "\n${GREEN}Detected CPU cores: $CPU_CORES${NC}"
     echo -e "${GREEN}Detected Total RAM: ${TOTAL_RAM}MB${NC}\n"
 }
-
 # Function to intelligently set buffer sizes and sysctl settings
 function intelligent_settings() {
     echo -e "\n${YELLOW}Starting intelligent network optimizations...${NC}\n"
@@ -173,7 +197,7 @@ function intelligent_settings() {
 
     echo -e "\n$(date): Starting sysctl configuration..."
     sleep 2
-    
+
     echo -e "\n${YELLOW}Backing up current sysctl.conf...${NC}\n"
     if [ -f /etc/sysctl.conf.bak ]; then
         echo -e "\n${YELLOW}Backup already exists. Skipping backup...${NC}\n"
@@ -181,79 +205,136 @@ function intelligent_settings() {
         cp /etc/sysctl.conf /etc/sysctl.conf.bak
     fi
 
-    # Intelligent buffer and backlog settings based on CPU and RAM
-    if [ "$TOTAL_RAM" -lt 2000 ] && [ "$CPU_CORES" -le 2 ]; then
-        rmem_max=16777216
-        wmem_max=16777216
-        netdev_max_backlog=250000
+    ############################################################################
+    # Dynamic tuning based on hardware resources with values adjusted for 
+    # serving clients with low internet speed and lossy networks.
+    #
+    # These values have been set more conservatively while still optimizing for
+    # high TCP connection counts and efficiency.
+    ############################################################################
+    if [ "$TOTAL_RAM" -lt 2000000 ] && [ "$CPU_CORES" -le 2 ]; then
+        rmem_max=2097152         # 2 MB
+        wmem_max=2097152         # 2 MB
+        netdev_max_backlog=100000
         queuing_disc="fq_codel"
-    elif [ "$TOTAL_RAM" -lt 4000 ] && [ "$CPU_CORES" -le 4 ]; then
-        rmem_max=33554432
-        wmem_max=33554432
-        netdev_max_backlog=500000
-        queuing_disc="cake"
+        tcp_mem="2097152 4194304 8388608"
+    elif [ "$TOTAL_RAM" -lt 4000000 ] && [ "$CPU_CORES" -le 4 ]; then
+        rmem_max=4194304         # 4 MB
+        wmem_max=4194304         # 4 MB
+        netdev_max_backlog=200000
+        queuing_disc="fq_codel"
+        tcp_mem="4194304 8388608 16777216"
     else
-        rmem_max=67108864
-        wmem_max=67108864
-        netdev_max_backlog=1000000
+        rmem_max=8388608         # 8 MB
+        wmem_max=8388608         # 8 MB
+        netdev_max_backlog=300000
         queuing_disc="cake"
+        tcp_mem="8388608 16777216 33554432"
     fi
-    echo "$(date): Set rmem_max=$rmem_max, wmem_max=$wmem_max, netdev_max_backlog=$netdev_max_backlog based on system resources. Queuing discipline: $queuing_disc"
 
-    # Adjust TCP settings 
-    tcp_rmem="4096 87380 16777216"
-    tcp_wmem="4096 65536 16777216"
+    tcp_rmem="4096 87380 $rmem_max"
+    tcp_wmem="4096 65536 $wmem_max"
+    tcp_congestion_control="bbr"
+    tcp_retries2=8
 
+    echo "$(date): Set rmem_max=$rmem_max, wmem_max=$wmem_max, netdev_max_backlog=$netdev_max_backlog. Queuing discipline: $queuing_disc"
     echo "$(date): Set tcp_rmem=$tcp_rmem, tcp_wmem=$tcp_wmem."
+    echo "$(date): Using TCP congestion control: $tcp_congestion_control, tcp_retries2: $tcp_retries2."
 
-    # Apply the settings to sysctl.conf
-    {
-    cat <<EOL
+    ############################################################################
+    # Overwrite /etc/sysctl.conf with the new configuration including
+    # additional parameters for high TCP connection handling and efficiency.
+    ############################################################################
+    cat <<EOL > /etc/sysctl.conf
 
-# Optimized TCP/Network settings based on benchmarks
+## File system settings
+fs.file-max = 67108864
+
+## Network core settings
 net.core.default_qdisc = $queuing_disc
-net.ipv4.tcp_congestion_control = bbr
-net.ipv4.tcp_ecn = 1
-net.ipv4.tcp_keepalive_time = 120
-net.ipv4.tcp_keepalive_intvl = 20
-net.ipv4.tcp_keepalive_probes = 3
-net.ipv4.tcp_sack = 1
-net.ipv4.tcp_window_scaling = 1
-net.ipv4.tcp_mtu_probing = 1
-
-# Dynamically adjusted buffer and backlog settings
 net.core.netdev_max_backlog = $netdev_max_backlog
-net.core.somaxconn = 65535
-net.core.rmem_default = 262144
+net.core.optmem_max = 65536
+net.core.somaxconn = 65536
 net.core.rmem_max = $rmem_max
-net.core.wmem_default = 262144
+net.core.rmem_default = 524288    # 512 KB tuned for low-speed links
 net.core.wmem_max = $wmem_max
+net.core.wmem_default = 524288    # 512 KB tuned for low-speed links
+
+## TCP settings
 net.ipv4.tcp_rmem = $tcp_rmem
 net.ipv4.tcp_wmem = $tcp_wmem
+net.ipv4.tcp_congestion_control = $tcp_congestion_control
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_keepalive_time = 600
+net.ipv4.tcp_keepalive_probes = 7
+net.ipv4.tcp_keepalive_intvl = 30
+net.ipv4.tcp_max_orphans = 1048576
+net.ipv4.tcp_max_syn_backlog = 262144
+net.ipv4.tcp_max_tw_buckets = 1440000
+net.ipv4.tcp_mem = $tcp_mem
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_notsent_lowat = 16384
+net.ipv4.tcp_retries2 = $tcp_retries2
+net.ipv4.tcp_sack = 1
+net.ipv4.tcp_dsack = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_adv_win_scale = -2
+net.ipv4.tcp_ecn = 1
+net.ipv4.tcp_ecn_fallback = 1
+net.ipv4.tcp_syncookies = 1
 
-# SYN Flood Protection
-net.ipv4.tcp_max_syn_backlog = 8192
+# Additional TCP tuning for high connection loads and efficiency:
+net.ipv4.tcp_tw_reuse = 1                   # Reuse TIME_WAIT sockets for new connections
+net.ipv4.tcp_fastopen = 3                   # Enable TCP Fast Open on both client and server sides
+net.ipv4.ip_local_port_range = 1024 65535   # Expand ephemeral port range
+net.ipv4.tcp_rfc1337 = 1                    # Improve behavior for port exhaustion
 
-# Reduce the time it takes to free up connections in FIN_WAIT state
-net.ipv4.tcp_fin_timeout = 10
+## UDP settings
+net.ipv4.udp_mem = 65536 131072 262144
 
-# Enable IP forwarding for VPN relay servers
-net.ipv4.ip_forward = 1
+## IPv6 settings
+#net.ipv6.conf.all.disable_ipv6 = 0
+#net.ipv6.conf.default.disable_ipv6 = 0
+#net.ipv6.conf.lo.disable_ipv6 = 0
 
+## UNIX domain sockets
+net.unix.max_dgram_qlen = 256
+
+## Virtual memory (VM) settings
+vm.min_free_kbytes = 131072
+vm.swappiness = 10
+vm.vfs_cache_pressure = 250
+
+## Network configuration
+net.ipv4.conf.default.rp_filter = 2
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.neigh.default.gc_thresh1 = 512
+net.ipv4.neigh.default.gc_thresh2 = 2048
+net.ipv4.neigh.default.gc_thresh3 = 16384
+net.ipv4.neigh.default.gc_stale_time = 60
+net.ipv4.conf.default.arp_announce = 2
+net.ipv4.conf.lo.arp_announce = 2
+net.ipv4.conf.all.arp_announce = 2
+
+kernel.panic = 1
+vm.dirty_ratio = 10
 EOL
-} >> /etc/sysctl.conf
 
-    echo "$(date): Network optimizations added to sysctl.conf."
+    echo "$(date): Network optimizations written to /etc/sysctl.conf."
 
     sysctl -p > /dev/null 2>&1 && echo -e "\n${GREEN}Network settings applied successfully!${NC}\n"
 
-    # Log the final values of interest
+    # Log the final dynamic values for reference
     echo -e "\n${YELLOW}Logging dynamic values...${NC}\n\n"
     echo "$(date): Final settings applied."
     echo "Total RAM: $TOTAL_RAM MB, CPU Cores: $CPU_CORES"
     echo "rmem_max: $rmem_max, wmem_max: $wmem_max, netdev_max_backlog: $netdev_max_backlog"
-    echo "tcp_rmem: $tcp_rmem, tcp_wmem: $tcp_wmem, Queuing discipline: $queuing_disc"
-    echo ""
+    echo "tcp_rmem: $tcp_rmem, tcp_wmem: $tcp_wmem"
+    echo "TCP Congestion Control: $tcp_congestion_control, tcp_retries2: $tcp_retries2"
+    echo "Queuing discipline: $queuing_disc"
     echo ""
     prompt_reboot
 }
@@ -279,34 +360,60 @@ function restore_original() {
 }
 
 find_best_mtu() {
-    local server_ip=8.8.8.8  # Google DNS server
-    local start_mtu=1500  # Standard MTU size for Ethernet
-    local min_mtu=1200    # Lower bound to prevent very small MTUs
+    local server_ip=8.8.8.8   # Google DNS server
+    local low=1200          # Lower bound MTU
+    local high=1500         # Standard MTU
+    local optimal=0
 
-    echo -e "${CYAN}Finding optimal MTU for server $server_ip...${NC}"
+    echo "[MTU LOG] Starting MTU search for server: $server_ip"
 
-    # Test if the server is reachable
+    # Check if the server is reachable
     if ! ping -c 1 -W 1 "$server_ip" &>/dev/null; then
-        echo -e "${RED}Server $server_ip is unreachable. Check the IP address or network connection.${NC}"
-        return 
+        echo "[MTU LOG] ERROR: Server $server_ip unreachable."
+        return 1
     fi
 
-    # Find the maximum MTU without fragmentation
-    local mtu=$start_mtu
-    while [ $mtu -ge $min_mtu ]; do
-        if ping -M do -s $((mtu - 28)) -c 1 "$server_ip" &>/dev/null; then
-            echo -e "${GREEN}Optimal MTU found: $mtu bytes${NC}"
-            read -n 1 -s -r -p "Press any key to continue..."
-            echo # for a new line
-            return 
+    # Verify that the minimum MTU works
+    if ! ping -M do -s $((low - 28)) -c 1 "$server_ip" &>/dev/null; then
+        echo "[MTU LOG] ERROR: Minimum MTU of $low bytes not viable."
+        return 1
+    fi
+
+    optimal=$low
+    # Use binary search to find the highest MTU that works
+    while [ $low -le $high ]; do
+        local mid=$(( (low + high) / 2 ))
+        if ping -M do -s $((mid - 28)) -c 1 "$server_ip" &>/dev/null; then
+            optimal=$mid
+            low=$(( mid + 1 ))
+        else
+            high=$(( mid - 1 ))
         fi
-        ((mtu--))
     done
 
-    echo -e "${RED}No suitable MTU found. Try adjusting the minimum MTU limit.${NC}"
-    read -n 1 -s -r -p "Press any key to continue..."
-    echo # for a new line
-    return 
+    echo "[MTU LOG] Optimal MTU found: ${optimal} bytes"
+
+    # Ask user if they want to set the current MTU to the found value
+    read -p "[MTU LOG] Do you want to set the optimal MTU on a network interface? (Y/n): " set_mtu_choice
+    if [[ -z "$set_mtu_choice" || "$set_mtu_choice" =~ ^[Yy] ]]; then
+        read -p "[MTU LOG] Enter the network interface name: " iface
+        if [[ -z "$iface" ]]; then
+            echo "[MTU LOG] ERROR: No interface provided."
+            return 1
+        fi
+
+        # Attempt to set the MTU using the ip command
+        if ip link set dev "$iface" mtu "$optimal"; then
+            echo "[MTU LOG] MTU set to ${optimal} bytes on interface $iface"
+        else
+            echo "[MTU LOG] ERROR: Failed to set MTU on interface $iface"
+            return 1
+        fi
+    else
+        echo "[MTU LOG] MTU setting skipped by user."
+    fi
+
+    return 0
 }
 
 # Function to prompt the user for a reboot

@@ -1,4 +1,4 @@
-# Linux Network Optimizer v0.6
+# Linux Network Optimizer v0.7
 
 This repository contains a **Bash script** designed to enhance network performance on Linux systems
 
